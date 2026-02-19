@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+<meta charset="UTF-8">
+<title>Pixel Tank War - Clean Skins</title>
+<style>
+body{margin:0;overflow:hidden;font-family:monospace;background:black;color:#0ff;}
+#hud{position:fixed;top:10px;left:10px;z-index:1000;background:rgba(0,0,0,0.5);padding:10px;border:2px solid #0ff;}
+#lifeContainer{width:200px;height:20px;border:4px solid #000;background:#333;margin-top:5px;}
+#lifeBar{height:100%;width:100%;background:#0ff;transition:.2s;}
+.tank{position:absolute;width:100px;height:100px;background:url("tank.png");background-size:cover;image-rendering:pixelated;}
+.enemy{position:absolute;width:50px;height:50px;background:url("enemy2.png");background-size:cover;image-rendering:pixelated;}
+.bullet{position:absolute;width:6px;height:6px;background:yellow;}
+.explosion{position:absolute;width:120px;height:120px;background: radial-gradient(circle,#ffcc00 0%,#ff6600 40%,#ff0000 70%,transparent 80%);border-radius:50%;animation: explode .35s ease-out forwards;pointer-events:none;}
+@keyframes explode{0%{transform:scale(.5);opacity:1;}100%{transform:scale(2);opacity:0;}}
+#blackScreen{position:fixed;width:100%;height:100%;background:black;opacity:0;transition:1s;pointer-events:none;z-index:9999;}
+#chatContainer{position:fixed;bottom:10px;left:10px;width:250px;max-height:180px;background:rgba(0,0,0,0.7);color:#0ff;padding:5px;z-index:1000;display:flex;flex-direction:column-reverse;font-family:monospace;border:2px solid #0ff;border-radius:5px;}
+#chatMessages{flex:1;overflow-y:auto;padding:5px;}
+#chatInput{width:100%;padding:5px;background:black;color:#0ff;border:none;outline:none;margin-top:5px;}
+#shopButton{position:fixed;top:70px;right:10px;padding:6px 12px;background:#0ff;color:black;font-weight:bold;border:none;cursor:pointer;z-index:1000;}
+#shop{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#222;color:white;padding:20px;width:400px;max-height:500px;overflow-y:auto;border:3px solid #0ff;box-shadow:0 0 15px #0ff;z-index:1000;}
+.shopItem{display:flex;justify-content:space-between;align-items:center;margin:10px 0;padding:10px;background:#333;border:1px solid #0ff;border-radius:8px;}
+.shopItem button{background:#0ff;border:none;color:black;font-weight:bold;cursor:pointer;padding:5px 10px;}
+/* Skins */
+.skin-blue { filter: hue-rotate(200deg); }
+.skin-gold { filter: hue-rotate(50deg) brightness(1.3); }
+</style>
+</head>
+<body>
+
+<div id="hud">Score: <span id="score">0</span>
+  <div id="lifeContainer"><div id="lifeBar"></div></div>
+</div>
+<div id="gameArea"></div>
+<div id="blackScreen"></div>
+
+<div id="chatContainer">
+  <div id="chatMessages"></div>
+  <input id="chatInput" placeholder="Type cheat code...">
+</div>
+
+<button id="shopButton">SHOP</button>
+<div id="shop">
+  <h3>SHOP</h3>
+  <div id="shopItems"></div>
+  <button onclick="closeShop()">Close</button>
+</div>
+
+<script>
+const gameArea=document.getElementById("gameArea");
+const scoreEl=document.getElementById("score");
+const lifeBar=document.getElementById("lifeBar");
+const blackScreen=document.getElementById("blackScreen");
+const shop=document.getElementById("shop");
+const shopItemsDiv=document.getElementById("shopItems");
+const chatInput=document.getElementById("chatInput");
+const chatMessages=document.getElementById("chatMessages");
+
+let score=0,playerHP=3,maxHP=3,canShoot=true,gameOver=false;
+let gunLevel=1,rapidFire=false;
+let tank=document.createElement("div");
+tank.className="tank";
+let tankX=window.innerWidth/2-50,tankY=window.innerHeight-150;
+tank.style.left=tankX+"px";tank.style.top=tankY+"px";
+gameArea.appendChild(tank);
+
+const keys={};
+document.addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
+document.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+function updateLife(){
+  let percent=(playerHP/maxHP)*100;
+  lifeBar.style.width=percent+"%";
+  if(percent>60) lifeBar.style.background="#0ff00";
+  else if(percent>30) lifeBar.style.background="#ffaa00";
+  else lifeBar.style.background="#ff0000";
+}
+
+function moveTank(){
+  if(keys['arrowleft'] && tankX>0) tankX-=6;
+  if(keys['arrowright'] && tankX<window.innerWidth-100) tankX+=6;
+  if(keys['arrowup'] && tankY>0) tankY-=6;
+  if(keys['arrowdown'] && tankY<window.innerHeight-100) tankY+=6;
+  tank.style.left=tankX+"px"; tank.style.top=tankY+"px";
+}
+
+/* Shooting */
+let bullets=[],enemies=[];
+function shoot(){
+  if(!canShoot||gameOver) return;
+  let multi=Math.min(gunLevel,5),speed=8;
+  if(rapidFire) speed+=4;
+  for(let i=0;i<multi;i++){
+    const b=document.createElement("div");
+    b.className="bullet";
+    b.style.left=tankX+50+(i-Math.floor(multi/2))*12+"px";
+    b.style.top=tankY+"px";
+    b.speed=speed;
+    bullets.push(b); gameArea.appendChild(b);
+  }
+}
+
+/* Enemies spawn */
+function spawnEnemy(){
+  if(gameOver) return;
+  const e=document.createElement("div");
+  e.className="enemy"; e.hp=1;
+  e.style.left=Math.random()*(window.innerWidth-50)+"px";
+  e.style.top="0px";
+  gameArea.appendChild(e); enemies.push(e);
+}
+setInterval(spawnEnemy,1500);
+
+/* Collision */
+function checkCollision(a,b){
+  return a.getBoundingClientRect().left <
+         b.getBoundingClientRect().right &&
+         a.getBoundingClientRect().right >
+         b.getBoundingClientRect().left &&
+         a.getBoundingClientRect().top <
+         b.getBoundingClientRect().bottom &&
+         a.getBoundingClientRect().bottom >
+         b.getBoundingClientRect().top;
+}
+
+function damagePlayer(){
+  playerHP--;updateLife();
+  if(playerHP<=0) playerDeath();
+}
+
+function playerDeath(){
+  gameOver=true; canShoot=false;
+  const exp=document.createElement("div");
+  exp.className="explosion"; exp.style.left=tankX+"px"; exp.style.top=tankY+"px";
+  gameArea.appendChild(exp); tank.style.display="none";
+  setTimeout(()=>{blackScreen.style.opacity=1;},300);
+  setTimeout(()=>{location.reload();},1500);
+}
+
+/* Game loop */
+function gameLoop(){
+  moveTank();
+  bullets.forEach((b,i)=>{
+    let y=parseInt(b.style.top); b.style.top=y-(b.speed)+"px";
+    enemies.forEach((e,j)=>{
+      if(checkCollision(b,e)){
+        e.hp--;
+        if(e.hp<=0){
+          score+=10;
+          scoreEl.textContent=score;
+          e.remove(); enemies.splice(j,1);
+        }
+        b.remove(); bullets.splice(i,1);
+      }
+    });
+    if(y<0){b.remove(); bullets.splice(i,1);}
+  });
+  enemies.forEach((e,i)=>{
+    let y=parseInt(e.style.top);
+    e.style.top=y+4+"px";
+    if(checkCollision(e,tank)){damagePlayer(); e.remove(); enemies.splice(i,1);}
+    if(y>window.innerHeight){e.remove(); enemies.splice(i,1);}
+  });
+  requestAnimationFrame(gameLoop);
+}
+updateLife(); gameLoop();
+
+/* Shooting events */
+document.addEventListener("keydown",e=>{
+  if(document.activeElement===chatInput) return;
+  if(e.code==="Space"||e.key===" ") shoot();
+});
+document.addEventListener("mousedown",e=>{if(document.activeElement!==chatInput) shoot();});
+
+/* Chat */
+chatInput.addEventListener("keydown",e=>{
+  if(e.key==="Enter"&&chatInput.value.trim()!==""){
+    const text=chatInput.value.trim();
+    const div=document.createElement("div"); div.textContent="You: "+text;
+    chatMessages.appendChild(div);
+    if(text==="1=1"){
+      score+=1000;
+      scoreEl.textContent=score;
+      const cheat=document.createElement("div");
+      cheat.textContent="Cheat Activated! +1000 Score 😈";
+      cheat.style.color="#0ff"; chatMessages.appendChild(cheat);
+    }
+    chatInput.value=""; chatMessages.scrollTop=chatMessages.scrollHeight;
+  }
+});
+
+/* Shop */
+document.getElementById("shopButton").addEventListener("click",()=>shop.style.display="block");
+function closeShop(){shop.style.display="none";}
+const shopItems=[
+  {name:"Upgrade Gun",cost:50,action:()=>{if(score>=50){score-=50;gunLevel++;scoreEl.textContent=score;alert("Gun Upgraded!");}}},
+  {name:"Rapid Fire",cost:500,action:()=>{if(score>=500){score-=500;rapidFire=true;scoreEl.textContent=score;alert("Rapid Fire purchased!");}}},
+  {name:"Blue Skin",cost:200,action:()=>{if(score>=200){score-=200;tank.classList.remove("skin-gold");tank.classList.add("skin-blue");scoreEl.textContent=score;}}},
+  {name:"Gold Skin",cost:500,action:()=>{if(score>=500){score-=500;tank.classList.remove("skin-blue");tank.classList.add("skin-gold");scoreEl.textContent=score;}}}
+];
+shopItems.forEach(item=>{
+  const div=document.createElement("div"); div.className="shopItem";
+  div.innerHTML=`<span>${item.name} (${item.cost})</span>`;
+  const btn=document.createElement("button"); btn.textContent="Buy"; btn.onclick=item.action;
+  div.appendChild(btn); shopItemsDiv.appendChild(div);
+});
+</script>
+</body>
+</html>
